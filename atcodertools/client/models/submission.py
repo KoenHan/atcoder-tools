@@ -21,8 +21,4 @@ class Submission:
         submitted_problem_ids = re.findall(r'/tasks/([A-Za-z0-9\'~+\-_]+)', text)
         submission_ids = re.findall(r'/submissions/([0-9]+)', text)
         assert len(submitted_problem_ids) == len(submission_ids)
-        # print(text)
-        # print(submitted_problem_ids)
-        # print(submission_ids)
-        # exit()
         return [Submission(pid, int(sid)) for pid, sid in zip(submitted_problem_ids, submission_ids)]
