@@ -14,7 +14,7 @@ from atcodertools.common.logging import logger
 from atcodertools.fileutils.artifacts_cache import get_cache_file_path
 from atcodertools.client.models.contest import Contest
 from atcodertools.client.models.problem import Problem
-from atcodertools.client.models.problem_content import ProblemContent, get_problem_content
+from atcodertools.client.models.problem_content import ProblemContent, InputFormatDetectionError, SampleDetectionError
 
 
 class LoginError(Exception):
@@ -65,7 +65,7 @@ class AtCoderClient(metaclass=Singleton):
         self._session = requests.Session()
 
     def check_logging_in(self):
-        private_url = "https://arc001.contest.atcoder.jp/settings"
+        private_url = "https://atcoder.jp/contests/arc001/settings"
         resp = self._request(private_url)
         return resp.url == private_url
 
@@ -89,34 +89,42 @@ class AtCoderClient(metaclass=Singleton):
 
         username, password = credential_supplier()
 
-        resp = self._request("https://arc001.contest.atcoder.jp/login", data={
-            'name': username,
+        resp = self._request("https://atcoder.jp/login")
+        soup = BeautifulSoup(resp.text, "html.parser")
+        session_id = soup.find("input", attrs={"type": "hidden"}).get("value") # csrf_token
+        postdata = {
+            "csrf_token": session_id,
+            "username": username,
             "password": password
-        }, method='POST')
+        }
+        resp = self._request(
+            "https://atcoder.jp/login",
+            data=postdata,
+            method='POST')
 
-        if resp.text.find("パスワードを忘れた方はこちら") != -1:
+        if resp.text.find("Forgot your password?") != -1:
             raise LoginError
 
-        if use_local_session_cache and save_session_cache:
+        if use_local_session_cache and not save_session_cache:
             save_cookie(self._session)
 
     def download_problem_list(self, contest: Contest) -> List[Problem]:
         resp = self._request(contest.get_problem_list_url())
         soup = BeautifulSoup(resp.text, "html.parser")
         res = []
-        for tag in soup.select('.linkwrapper')[0::2]:
-            alphabet = tag.text
-            problem_id = tag.get("href").split("/")[-1]
+        for tag in soup.select('.text-center.no-break')[0::2]:
+            alphabet = tag.a.text
+            problem_id = tag.a.get("href").split("/")[-1]
             res.append(Problem(contest, alphabet, problem_id))
         return res
 
-    def download_problem_content_raw_html(self, problem: Problem) -> str:
-        resp = self._request(problem.get_url())
-        return resp.text
-
     def download_problem_content(self, problem: Problem) -> ProblemContent:
-        html = self.download_problem_content_raw_html(problem)
-        return get_problem_content(html)
+        resp = self._request(problem.get_url())
+
+        try:
+            return ProblemContent.from_html(resp.text)
+        except (InputFormatDetectionError, SampleDetectionError) as e:
+            raise e
 
     def download_all_contests(self) -> List[Contest]:
         contest_ids = []
@@ -158,20 +166,24 @@ class AtCoderClient(metaclass=Singleton):
         soup = BeautifulSoup(resp.text, "html.parser")
         session_id = soup.find("input", attrs={"type": "hidden"}).get("value")
         task_select_area = soup.find(
-            'select', attrs={"id": "submit-task-selector"})
+            'select', attrs={"id": "select-task"})
         task_field_name = task_select_area.get("name")
         task_number = task_select_area.find(
             "option", text=re.compile('{} -'.format(problem.get_alphabet()))).get("value")
+        language_field_name = soup.find(
+            'div', attrs={"id": "select-lang".format(problem.problem_id)}).get("data-name")
+
         language_select_area = soup.find(
-            'select', attrs={"id": "submit-language-selector-{}".format(task_number)})
-        language_field_name = language_select_area.get("name")
+            'div', attrs={"id": "select-lang-{}".format(problem.problem_id)}).find('select')
+
         language_number = language_select_area.find(
             "option", text=lang_option_pattern).get("value")
+
         postdata = {
-            "__session": session_id,
+            "csrf_token": session_id,
             task_field_name: task_number,
             language_field_name: language_number,
-            "source_code": source
+            "sourceCode": source
         }
         resp = self._request(
             contest.get_submit_url(),

@@ -10,19 +10,21 @@ class Contest:
         return self.contest_id
 
     def get_url(self):
-        return "https://{}.contest.atcoder.jp/".format(self.contest_id)
+        return "https://atcoder.jp/contests/{}/".format(self.contest_id)
+        # return "https://{}.contest.atcoder.jp/".format(self.contest_id)
 
     def get_new_url(self):
         return "https://atcoder.jp/contests/{}/".format(self.contest_id)
 
     def get_problem_list_url(self):
-        return "{}assignments".format(self.get_url())
+        test = "{}assignments".format(self.get_new_url())
+        return test
 
     def get_submit_url(self):
-        return "{}submit".format(self.get_url())
+        return "{}submit".format(self.get_new_url())
 
     def get_my_submissions_url(self, page=1):
-        return "{}submissions/me/{}".format(self.get_url(), page)
+        return "{}submissions/me/{}".format(self.get_new_url(), page)
 
     def get_submissions_url(self, submission: Submission):
         return "{}submissions/{}".format(self.get_new_url(), submission.submission_id)

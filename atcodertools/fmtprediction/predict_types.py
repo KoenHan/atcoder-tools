@@ -48,15 +48,7 @@ def is_float(text):
 
 
 def is_int(text):
-    if text == "0":
-        return True
-    if re.match(r"-?\d+$", text) is None:
-        return False
-    if text[0] == "0":
-        return False
-    if len(text) > 19 or (text[0] == '-' and len(text) > 20):
-        return False
-    return True
+    return re.match(r"-?\d+$", text) is not None
 
 
 def _convert_to_proper_type(value: str) -> Any:
